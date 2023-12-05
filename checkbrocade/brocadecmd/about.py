@@ -24,6 +24,7 @@ from monplugin import Check,Status
 from ..tools import cli
 from ..tools.helper import severity
 from ..tools.connect import broadcomAPI
+import json
 from pprint import pprint as pp
 
 __cmd__ = "about"
@@ -74,12 +75,11 @@ def run():
     
     check = Check()
 
-    pp(args)   
     logger.debug(f"#-> START") 
     api = broadcomAPI(logger, base_url, args.username, args.password)
     response_data = api.make_request("GET", "rest/running/brocade-chassis/chassis")
-    print(response_data) 
-    
+    chassis = response_data['chassis']
+    check.add_message(Status.OK, f"{chassis['manufacturer']} {chassis['chassis-user-friendly-name']} S/N {chassis['serial-number']}")
     (code, message) = check.check_messages(separator="\n")
     check.exit(code=code,message=message)
 
