@@ -43,3 +43,17 @@ def compareVersion(required,current) -> None:
        elif v1 > v2:
            return 0
     return -1
+
+# Include & Exclude filter
+def item_filter(args,item=None) -> None:
+    """ Filter for items like disks, sensors, etc.."""
+    if args.exclude:
+        if re.search(args.exclude,item):
+            return(True)
+        else:
+            return(False)
+    elif args.include:
+        if re.search(args.include,item):
+            return(False)
+        else:
+            return(True)

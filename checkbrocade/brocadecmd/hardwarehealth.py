@@ -16,7 +16,6 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-from dataclasses import fields
 import logging
 from monplugin import Check,Status
 from ..tools import cli
@@ -24,18 +23,14 @@ from ..tools.helper import severity
 from ..tools.connect import broadcomAPI
 
 __cmd__ = "hardware-health"
-description = f"{__cmd__} "
+description = f"{__cmd__} checks for hardware health state of Blade, Fan, Temperature and Power-Supplies"
 """
 """
 def run():
     parser = cli.Parser()
-    parser.set_epilog("Check for health of Blade, Fan and Powersupplies")
+    parser.set_epilog("Check for health of Blade, Fan, Temperature and Powersupplies")
     parser.set_description(description)
     parser.add_optional_arguments(cli.Argument.PERFDATA) 
-    # as fru has just id'a include / exclude does not make sense right now
-    #parser.add_optional_arguments(cli.Argument.EXCLUDE,
-    #                              cli.Argument.INCLUDE,
-    #                              cli.Argument.PERFDATA)
     parser.add_optional_arguments({
         'name_or_flags': ['--type'],
         'options': {
@@ -113,6 +108,9 @@ def run():
                 if power['input-voltage'] != -1:
                     perfData = {'label': f"power-supply_{power['unit-number']}_input", 'value': f"{power['input-voltage']}", 'uom': "V"}
                     check.add_perfdata(**perfData)
+                if power['temperature-sensor-supported'] and 'temp' in sType:
+                    perfDataTemp = {'label': f"temperatur_power-supply_{power['unit-number']}", 'value': f"{power['temperature']}", 'uom': "C"}
+                    check.add_perfdata(**perfDataTemp)
         summary += f"{len(p['power-supply'])} power-supplies "
         
     if 'temp' in sType:
@@ -121,7 +119,7 @@ def run():
             if 'ok' not in sensor['state']:
                 check.add_message(Status.WARNING, f"Sensor {sensor['category']} {sensor['id']} is {sensor['state']}")
             if 'temperature' in sensor['category']:
-                uom = "celsius"
+                uom = "C"
             else:
                 uom = ""
             if args.perfdata:

@@ -16,46 +16,15 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-from dataclasses import fields
 import logging
 from monplugin import Check,Status
-#from netapp_ontap.resources import Software
-#from netapp_ontap.error import NetAppRestError
 from ..tools import cli
 from ..tools.helper import severity
 from ..tools.connect import broadcomAPI
-import json
-from pprint import pprint as pp
 
 __cmd__ = "about"
 description = f"{__cmd__} need just connection settings and show up the brocade version"
 """
-{'Response':
-    {'chassis': 
-        {'chassis-user-friendly-name': 'BrocadeG620', 
-        'license-id': '10:00:88:94:71:ce:bb:7a', 
-        'chassis-wwn': '10:00:88:94:71:ce:bb:b9', 
-        'serial-number': 'EWY1929Q06S', 
-        'entitlement-serial-number': 'EWY1929Q06S', 
-        'manufacturer': 'Brocade Communications Systems LLC', 
-        'part-number': '40-1001274-01',
-        'vf-enabled': False,
-        'vf-supported': True, 
-        'fcr-enabled': False, 
-        'fcr-supported': True, 
-        'max-blades-supported': 1,
-        'vendor-revision-number': '', 
-        'vendor-part-number': 'BROCAD0000G62', 
-        'vendor-serial-number': 'CZC929NKVM', 
-        'product-name': 'g620', 
-        'chassis-enabled': True, 
-        'shell-timeout': 60,
-        'session-timeout': 0,
-        'message-of-the-day': '',
-        'date': '11/27/2023-16:45:46', 
-        'usb-device-enabled': False, 
-        'usb-available-space': 0,
-        'tcp-timeout-level': 5}}}
 """
 def run():
     parser = cli.Parser()
@@ -75,11 +44,10 @@ def run():
     
     check = Check()
 
-    logger.debug(f"#-> START") 
     api = broadcomAPI(logger, base_url, args.username, args.password)
     response_data = api.make_request("GET", "rest/running/brocade-chassis/chassis")
     chassis = response_data['chassis']
-    check.add_message(Status.OK, f"{chassis['manufacturer']} {chassis['chassis-user-friendly-name']} S/N {chassis['serial-number']}")
+    check.add_message(Status.OK, f"{chassis['manufacturer']} {chassis['product-name']} S/N {chassis['serial-number']}")
     (code, message) = check.check_messages(separator="\n")
     check.exit(code=code,message=message)
 

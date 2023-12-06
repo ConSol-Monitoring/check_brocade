@@ -21,7 +21,6 @@ from monplugin import Check,Status
 from ..tools import cli
 from ..tools.helper import severity,item_filter
 from ..tools.connect import broadcomAPI
-from pprint import pprint as pp
 
 __cmd__ = "interface-health"
 description = f"{__cmd__} interface-health"
@@ -62,9 +61,27 @@ def run():
     
     check = Check()
 
-    logger.debug(f"#-> START") 
     api = broadcomAPI(logger, base_url, args.username, args.password)
-    f = api.make_request("GET","rest/running/brocade-interface/fibrechannel")
+    virtual_fabrics = {}
+    c = api.make_request("GET", "rest/running/brocade-chassis/chassis")
+    chassis = c['chassis']
+    # check vf enabled and in use
+    if chassis['vf-enabled']:
+        logger.info(f"VF Found checking for IDs")
+        s = api.make_request("GET","rest/running/brocade-fibrechannel-logical-switch/fibrechannel-logical-switch")
+        # which vfs have ports
+        for vf in s['fibrechannel-logical-switch']:
+            if len(vf['port-index-members']) != 0:
+                logger.info(f"get fibrechannels for virtual fabric {vf['fabric-id']}")
+                f = api.make_request("GET",f"rest/running/brocade-interface/fibrechannel?vf-id={vf['fabric-id']}")
+                virtual_fabrics[str(vf['fabric-id'])] = f['fibrechannel']
+            else:
+                logger.debug(f"Fabric-ID {vf['fabric-id']} has no ports")
+    else:
+        logger.info(f"NO VF go ahead")
+        f = api.make_request("GET","rest/running/brocade-interface/fibrechannel")
+        virtual_fabrics['novf']= f['fibrechannel']
+  
     """
     operational-status(-string)
     0 : Undefined
@@ -73,45 +90,51 @@ def run():
     5 : Faulty
     6 : Testing
     """
-    port_count = len(f['fibrechannel'])
-    admin_state = "enabled" 
-    
-    for int in f['fibrechannel']:
-        # just e-ports are interesting
-        if int['port-type-string'] not in args.port_type:
-        #if int['port-type'] != 7:
-            port_count -= 1
-            continue
-        
-        logline = f"{int['port-type-string']} {int['name']} ({int['user-friendly-name']}) {int['operational-status-string']} {int['operational-status']}"
-       
-        # Filter out include / exclude and disabled ports 
-        if (args.exclude or args.include) and item_filter(args,f"{int['port-type-string']} {int['name']} {int['user-friendly-name']}"): 
-            logger.info(f"skip {logline} include / exlude match")
-            port_count -= 1
-            continue
-       
-        # port not enabled but ignored 
-        if args.ignore_disabled and not int['is-enabled-state']:
-            logger.info(f"ignore {logline} it's disabled")
-            port_count -= 1
-            continue
-       
-        if not int['is-enabled-state']: admin_state = "disabled"
-        
-        text = f"{int['port-type-string']} {int['name']:5} {int['user-friendly-name']:20} {admin_state}/{int['operational-status-string']}"
-       
-        # Check for status    
-        if not int['is-enabled-state']:
-            check.add_message(Status.WARNING, text)
-        # critical if healthy, faulty or offline
-        if "healthy" not in int['port-health'] or int['operational-status'] == 5 or int['operational-status'] == 3:
-            check.add_message(Status.CRITICAL, text)   
-        # warning if undefined or testing
-        elif int['operational-status'] == 0 or int['operational-status'] == 6:
-            check.add_message(Status.WARNING, text)
+    port_count = 0
+   
+    for vf,fibrechannel in virtual_fabrics.items(): 
+        if 'novf' in vf: 
+            VF = ""
         else:
-            check.add_message(Status.OK, text) 
+            VF = f"VF {vf:3} "
+        port_count += len(fibrechannel)    
+        
+        for int in fibrechannel:
+            admin_state = "enabled" 
+            # just e-ports are interesting
+            if int['port-type-string'] not in args.port_type:
+                port_count -= 1
+                continue
+            
+            logline = f"{VF}{int['port-type-string']} {int['name']} ({int['user-friendly-name']}) {int['operational-status-string']} {int['operational-status']}"
+           
+            # Filter out include / exclude and disabled ports 
+            if (args.exclude or args.include) and item_filter(args,f"{int['port-type-string']} {int['name']} {int['user-friendly-name']}"): 
+                logger.info(f"skip {logline} include / exlude match")
+                port_count -= 1
+                continue
+           
+            # port not enabled but ignored 
+            if args.ignore_disabled and not int['is-enabled-state']:
+                logger.info(f"ignore {logline} it's disabled")
+                port_count -= 1
+                continue
+           
+            if not int['is-enabled-state']: admin_state = "disabled"
+            
+            text = f"{VF}{int['port-type-string']} {int['name']:5} {int['user-friendly-name']:23} {admin_state}/{int['operational-status-string']}"
+           
+            # Check for status    
+            if not int['is-enabled-state']:
+                check.add_message(Status.WARNING, text)
+            # critical if healthy, faulty or offline
+            if "healthy" not in int['port-health'] or int['operational-status'] == 5 or int['operational-status'] == 3:
+                check.add_message(Status.CRITICAL, text)   
+            # warning if undefined or testing
+            elif int['operational-status'] == 0 or int['operational-status'] == 6:
+                check.add_message(Status.WARNING, text)
+            else:
+                check.add_message(Status.OK, text) 
     
     (code, message) = check.check_messages(separator="\n")
     if code == Status.OK and port_count == 1:
