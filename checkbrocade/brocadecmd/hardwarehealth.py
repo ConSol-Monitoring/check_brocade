@@ -26,7 +26,11 @@ __cmd__ = "hardware-health"
 description = f"{__cmd__} checks for hardware health state of Blade, Fan, Temperature and Power-Supplies"
 """
 """
+logger = None
+args = None
 def run():
+    global logger
+    global args
     parser = cli.Parser()
     parser.set_epilog("Check for health of Blade, Fan, Temperature and Powersupplies")
     parser.set_description(description)
@@ -49,10 +53,15 @@ def run():
             log_obj.disabled = False
             logging.getLogger(log_name).setLevel(severity(args.verbose))
 
-    base_url = f"https://{args.host}:{args.port}"
-    
     check = Check()
-
+    try:
+        plugin(check)
+    except Exception as e:
+        logger.error(f"{e}")
+        check.exit(Status.UNKNOWN, f"{e}")
+        
+def plugin(check):
+    base_url = f"https://{args.host}:{args.port}"
     if not args.type:
         sType = ['blade','fan','power','temp']
     else:

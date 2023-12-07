@@ -21,12 +21,18 @@ from monplugin import Check,Status
 from ..tools import cli
 from ..tools.helper import severity
 from ..tools.connect import broadcomAPI
+from pprint import pprint as pp
 
 __cmd__ = "about"
 description = f"{__cmd__} need just connection settings and show up the brocade version"
 """
 """
+logger = None
+args = None
+
 def run():
+    global logger
+    global args
     parser = cli.Parser()
     parser.set_epilog("Connect to brocade API and check Software version")
     parser.set_description(description)
@@ -39,11 +45,16 @@ def run():
         for log_name, log_obj in logging.Logger.manager.loggerDict.items():
             log_obj.disabled = False
             logging.getLogger(log_name).setLevel(severity(args.verbose))
-
-    base_url = f"https://{args.host}:{args.port}"
-    
+            
     check = Check()
-
+    try:
+        plugin(check)
+    except Exception as e:
+        logger.error(f"{e}")
+        check.exit(Status.UNKNOWN, f"{e}")
+    
+def plugin(check):
+    base_url = f"https://{args.host}:{args.port}"
     api = broadcomAPI(logger, base_url, args.username, args.password)
     response_data = api.make_request("GET", "rest/running/brocade-chassis/chassis")
     chassis = response_data['chassis']

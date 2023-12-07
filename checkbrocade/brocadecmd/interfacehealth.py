@@ -26,7 +26,12 @@ __cmd__ = "interface-health"
 description = f"{__cmd__} interface-health"
 """
 """
+logger = None
+args = None
+
 def run():
+    global logger
+    global args
     parser = cli.Parser()
     parser.set_epilog("Check for Interface Health")
     parser.set_description(description)
@@ -57,10 +62,15 @@ def run():
             log_obj.disabled = False
             logging.getLogger(log_name).setLevel(severity(args.verbose))
 
-    base_url = f"https://{args.host}:{args.port}"
-    
     check = Check()
-
+    try:
+        plugin(check)
+    except Exception as e:
+        logger.error(f"{e}")
+        check.exit(Status.UNKNOWN, f"{e}")
+        
+def plugin(check):
+    base_url = f"https://{args.host}:{args.port}"
     api = broadcomAPI(logger, base_url, args.username, args.password)
     virtual_fabrics = {}
     c = api.make_request("GET", "rest/running/brocade-chassis/chassis")

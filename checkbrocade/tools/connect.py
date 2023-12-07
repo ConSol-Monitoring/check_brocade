@@ -51,67 +51,37 @@ class broadcomAPI():
         """
         self.logger.info(f"try login to {self.base_url}")
         login_url = f"{self.base_url}/rest/login" 
-        try:
-            response = requests.post(login_url, headers=self.headers, auth=(self.username, self.password),verify=self.verify)
-            CustomBasic = response.headers.get("Authorization")
-            if response.status_code == 200:
-                self.logger.info(f"Login successfull {response.status_code}")
-                #self.logger.debug(f"Response header: {response.headers}")
-                atexit.register(broadcomAPI.logout, self)
-                self.logger.debug(f'curl -v -X POST -H "Authorization: Custom_Basic {CustomBasic}" -H "Accept: application/yang-data+json" "{self.base_url}/rest/logout"')
-                return CustomBasic
-            elif response.status_code == 403:
-                self.logger.error(f"{response.reason}")
-                raise CheckBrocadeConnnectException
-            # gschmarre hier müssen noch die anderen 400er rein
-            #else:
-            #    self.logger.error(f"received {response.status_code}")
-            #    raise CheckBrocadeConnnectException
-        except requests.exceptions.HTTPError as errh:
-            self.logger.error(f"HTTP Error: {errh}")
-        except requests.exceptions.ConnectionError as errc:
-            self.logger.error(f"Error Connecting: {errc}")
-        except requests.exceptions.Timeout as errt:
-            self.logger.error(f"Timeout Error: {errt}")
-        except requests.exceptions.RequestException as err:
-            self.logger.error(f"Error: {err}")
-            
+        response = requests.post(login_url, headers=self.headers, auth=(self.username, self.password),verify=self.verify)
+        if not response.ok:
+            self.logger.error(f"requests response not ok")
+        response.raise_for_status()
+        CustomBasic = response.headers.get("Authorization")
+        if response.status_code == 200:
+            self.logger.info(f"Login successfull {response.status_code}")
+            atexit.register(broadcomAPI.logout, self)
+            self.logger.debug(f'curl -v -X POST -H "Authorization: Custom_Basic {CustomBasic}" -H "Accept: application/yang-data+json" "{self.base_url}/rest/logout"')
+            return CustomBasic
+        else:
+            self.logger.error(f"Login failure {response.status_code}") 
+        
     def logout(self):
         self.logger.info("logout")
         logout_url = f"{self.base_url}/rest/logout"
-        try:
-            response = self.session.post(logout_url )
-            self.logger.debug(f"{response.status_code}")
-            self.logger.debug(f"{response.headers}")
-            response.raise_for_status()
-            if response.status_code == 204:
-                self.logger.info("logout successfully")
+        response = self.session.post(logout_url )
+        self.logger.debug(f"{response.status_code}")
+        self.logger.debug(f"{response.headers}")
+        response.raise_for_status()
+        if response.status_code == 204:
+            self.logger.info("logout successfully")
                 
-            self.session.close()
-        except requests.exceptions.HTTPError as errh:
-            self.logger.error(f"HTTP Error: {errh}")
-        except requests.exceptions.ConnectionError as errc:
-            self.logger.error(f"Error Connecting: {errc}")
-        except requests.exceptions.Timeout as errt:
-            self.logger.error(f"Timeout Error: {errt}")
-        except requests.exceptions.RequestException as err:
-            self.logger.error(f"Error: {err}")
+        self.session.close()
         
     def make_request(self, method, endpoint, data=None, params=None):
         url = f"{self.base_url}/{endpoint}"
         self.logger.info(f"make {method} request to {url}")
-        try:
-            response = self.session.request(method, url, json=data, params=params)
-            response.raise_for_status()
-            r_dict = response.json()
-            self.logger.debug(f"{json.dumps(r_dict, indent=4, sort_keys=True)}") 
-            #self.logger.debug(f"{r_dict}")
-            return r_dict['Response']
-        except requests.exceptions.HTTPError as errh:
-            print(f"HTTP Error: {errh}")
-        except requests.exceptions.ConnectionError as errc:
-            print(f"Error Connecting: {errc}")
-        except requests.exceptions.Timeout as errt:
-            print(f"Timeout Error: {errt}")
-        except requests.exceptions.RequestException as err:
-            print(f"Error: {err}")
+        response = self.session.request(method, url, json=data, params=params)
+        response.raise_for_status()
+        r_dict = response.json()
+        self.logger.debug(f"{json.dumps(r_dict, indent=4, sort_keys=True)}") 
+        #self.logger.debug(f"{r_dict}")
+        return r_dict['Response']
