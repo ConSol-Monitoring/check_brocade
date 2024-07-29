@@ -59,7 +59,7 @@ class broadcomAPI():
         if response.status_code == 200:
             self.logger.info(f"Login successfull {response.status_code}")
             atexit.register(broadcomAPI.logout, self)
-            self.logger.debug(f'curl -v -X POST -H "Authorization: Custom_Basic {CustomBasic}" -H "Accept: application/yang-data+json" "{self.base_url}/rest/logout"')
+            self.logger.debug(f'for manual logout please use curl \n curl -kv -X POST -H "Authorization: Custom_Basic {CustomBasic}" -H "Accept: application/yang-data+json" "{self.base_url}/rest/logout"')
             return CustomBasic
         else:
             self.logger.error(f"Login failure {response.status_code}") 
