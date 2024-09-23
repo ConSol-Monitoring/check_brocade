@@ -51,7 +51,7 @@ class broadcomAPI():
         """
         self.logger.info(f"try login to {self.base_url}")
         login_url = f"{self.base_url}/rest/login" 
-        response = requests.post(login_url, headers=self.headers, auth=(self.username, self.password),verify=self.verify)
+        response = requests.post(login_url, headers=self.headers, auth=(self.username, self.password),verify=self.verify, timeout=(5,5))
         if not response.ok:
             self.logger.error(f"requests response not ok")
         response.raise_for_status()

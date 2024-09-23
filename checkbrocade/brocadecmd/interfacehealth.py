@@ -101,7 +101,6 @@ def plugin(check):
     6 : Testing
     """
     port_count = 0
-   
     for vf,fibrechannel in virtual_fabrics.items(): 
         if 'novf' in vf: 
             VF = ""
@@ -112,7 +111,9 @@ def plugin(check):
         for int in fibrechannel:
             admin_state = "enabled" 
             # just e-ports are interesting
-            if int['port-type-string'] not in args.port_type:
+            if 'all' in args.port_type:
+                pass
+            elif int['port-type-string'] not in args.port_type:
                 port_count -= 1
                 continue
             
@@ -133,12 +134,13 @@ def plugin(check):
             if not int['is-enabled-state']: admin_state = "disabled"
             
             text = f"{VF}{int['port-type-string']} {int['name']:5} {int['user-friendly-name']:23} {admin_state}/{int['operational-status-string']}"
-           
             # Check for status    
             if not int['is-enabled-state']:
                 check.add_message(Status.WARNING, text)
             # critical if healthy, faulty or offline
-            if "healthy" not in int['port-health'] or int['operational-status'] == 5 or int['operational-status'] == 3:
+            if "healthy" not in int['port-health']:
+                check.add_message(Status.CRITICAL, f"{VF}{int['port-type-string']} {int['name']:5} {int['user-friendly-name']:23} {int['port-health']}")
+            elif int['operational-status'] == 5 or int['operational-status'] == 3:
                 check.add_message(Status.CRITICAL, text)   
             # warning if undefined or testing
             elif int['operational-status'] == 0 or int['operational-status'] == 6:
