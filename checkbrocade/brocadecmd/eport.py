@@ -47,6 +47,8 @@ def run():
 
     api = broadcomAPI(logger, base_url, args.username, args.password)
     response_data = api.make_request("GET", "rest/running/brocade-interface/fibrechannel-statistics")
+    for p in response_data['fibrechannel-statistics']:
+        pp(p)
     (code, message) = check.check_messages(separator="\n")
     check.exit(code=code,message=message)
 
