@@ -19,7 +19,7 @@
 import logging
 from monplugin import Check,Status
 from ..tools import cli
-from ..tools.helper import severity
+from ..tools.helper import severity,compare_versions
 from ..tools.connect import broadcomAPI
 
 __cmd__ = "hardware-health"
@@ -34,7 +34,7 @@ def run():
     parser = cli.Parser()
     parser.set_epilog("Check for health of Blade, Fan, Temperature and Powersupplies")
     parser.set_description(description)
-    parser.add_optional_arguments(cli.Argument.PERFDATA) 
+    parser.add_optional_arguments(cli.Argument.PERFDATA)
     parser.add_optional_arguments({
         'name_or_flags': ['--type'],
         'options': {
@@ -45,7 +45,7 @@ def run():
     })
     args = parser.get_args()
 
-    # Setup module logging 
+    # Setup module logging
     logger = logging.getLogger(__name__)
     logger.disabled=True
     if args.verbose:
@@ -59,19 +59,24 @@ def run():
     except Exception as e:
         logger.error(f"{e}")
         check.exit(Status.UNKNOWN, f"{e}")
-        
+
 def plugin(check):
     base_url = f"https://{args.host}:{args.port}"
     if not args.type:
         sType = ['blade','fan','power','temp']
     else:
         sType = args.type
-        
-    logger.debug(f"begin {__cmd__}") 
+
+    logger.debug(f"begin {__cmd__}")
     api = broadcomAPI(logger, base_url, args.username, args.password)
-    
+
+    logger.debug(f"Resource API version: {api.version()} might be FabricOS {api.version(True)}")
+    if not compare_versions("9.0.0", api.version(True)):
+        logger.warning(f"as version {api.version(True)} is to old I remove sensor endpoint")
+        sType.remove("temp")
+
     summary = ""
-    
+
     if 'blade' in sType:
         b = api.make_request("GET", "rest/running/brocade-fru/blade")
         for blade in b['blade']:
@@ -81,61 +86,70 @@ def plugin(check):
             else:
                 check.add_message(Status.CRITICAL, text)
         summary += f"{len(b['blade'])} Blades "
-   
-    # no usabel respones for wwn query 
+
+    # no usabel respones for wwn query
     if 'wwn' in sType:
         pass
         w = api.make_request("GET", "rest/running/brocade-fru/wwn")
-   
-    # also no sensfull data at this time    
+
+    # also no sensfull data at this time
     if 'history' in sType:
         pass
         h = api.make_request("GET", "rest/running/brocade-fru/history-log")
-        
+
     if 'fan' in sType:
         f = api.make_request("GET", "rest/running/brocade-fru/fan")
-        for fan in f['fan']:
-            text = f"Fan unit {fan['unit-number']} is {fan['operational-state']}"
-            if 'ok' in fan['operational-state']:
-                check.add_message(Status.OK, text)
-            else:
-                check.add_message(Status.CRITICAL, text)
-            if args.perfdata:
-                perfData = {'label': f"fan_{fan['unit-number']}_speed", 'value': f"{fan['speed']}", 'uom': "rpm"}
-                check.add_perfdata(**perfData)
-        summary += f"{len(f['fan'])} Fans "
-        
+        if not f:
+            check.add_message(Status.OK, "no fan")
+        else:
+            for fan in f['fan']:
+                text = f"Fan unit {fan['unit-number']} is {fan['operational-state']}"
+                if 'ok' in fan['operational-state']:
+                    check.add_message(Status.OK, text)
+                else:
+                    check.add_message(Status.CRITICAL, text)
+                if args.perfdata:
+                    perfData = {'label': f"fan_{fan['unit-number']}_speed", 'value': f"{fan['speed']}", 'uom': "rpm"}
+                    check.add_perfdata(**perfData)
+            summary += f"{len(f['fan'])} Fans "
+
     if 'power' in sType:
         p = api.make_request("GET", "rest/running/brocade-fru/power-supply")
-        for power in p['power-supply']:
-            text = f"power-supply {power['unit-number']} is {power['operational-state']}"
-            if 'ok' in power['operational-state']:
-                check.add_message(Status.OK, text)
-            else:
-                check.add_message(Status.CRITICAL, text)
-            if args.perfdata:
-                if power['input-voltage'] != -1:
-                    perfData = {'label': f"power-supply_{power['unit-number']}_input", 'value': f"{power['input-voltage']}", 'uom': "V"}
-                    check.add_perfdata(**perfData)
-                if power['temperature-sensor-supported'] and 'temp' in sType:
-                    perfDataTemp = {'label': f"temperatur_power-supply_{power['unit-number']}", 'value': f"{power['temperature']}", 'uom': "C"}
-                    check.add_perfdata(**perfDataTemp)
-        summary += f"{len(p['power-supply'])} power-supplies "
-        
+        if not p:
+            check.add_message(Status.OK, "no powersupply")
+        else:
+            for power in p['power-supply']:
+                text = f"power-supply {power['unit-number']} is {power['operational-state']}"
+                if 'ok' in power['operational-state']:
+                    check.add_message(Status.OK, text)
+                else:
+                    check.add_message(Status.CRITICAL, text)
+                if args.perfdata:
+                    if power['input-voltage'] != -1:
+                        perfData = {'label': f"power-supply_{power['unit-number']}_input", 'value': f"{power['input-voltage']}", 'uom': "V"}
+                        check.add_perfdata(**perfData)
+                    if power['temperature-sensor-supported'] and 'temp' in sType:
+                        perfDataTemp = {'label': f"temperatur_power-supply_{power['unit-number']}", 'value': f"{power['temperature']}", 'uom': "C"}
+                        check.add_perfdata(**perfDataTemp)
+            summary += f"{len(p['power-supply'])} power-supplies "
+
     if 'temp' in sType:
         t = api.make_request("GET", "rest/running/brocade-fru/sensor")
-        for sensor in t['sensor']:
-            if 'ok' not in sensor['state']:
-                check.add_message(Status.WARNING, f"Sensor {sensor['category']} {sensor['id']} is {sensor['state']}")
-            if 'temperature' in sensor['category']:
-                uom = "C"
-            else:
-                uom = ""
-            if args.perfdata:
-                perfData = {'label': f"{sensor['category']}_{sensor['id']}", 'value': f"{sensor[sensor['category']]}", 'uom': uom}
-                check.add_perfdata(**perfData)
-        summary += f"{len(t['sensor'])} Temp-Sensors"
-             
+        if not t:
+            check.add_messages(Status.OK, "no temp")
+        else:
+            for sensor in t['sensor']:
+                if 'ok' not in sensor['state']:
+                    check.add_message(Status.WARNING, f"Sensor {sensor['category']} {sensor['id']} is {sensor['state']}")
+                if 'temperature' in sensor['category']:
+                    uom = "C"
+                else:
+                    uom = ""
+                if args.perfdata:
+                    perfData = {'label': f"{sensor['category']}_{sensor['id']}", 'value': f"{sensor[sensor['category']]}", 'uom': uom}
+                    check.add_perfdata(**perfData)
+            summary += f"{len(t['sensor'])} Temp-Sensors"
+
     (code, message) = check.check_messages(separator="\n")
     if code == Status.OK:
         check.exit(code=code,message=f"{summary}\n{message}")
