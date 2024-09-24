@@ -44,6 +44,31 @@ def compareVersion(required,current) -> None:
            return 0
     return -1
 
+def compare_versions(required, current):
+    def split_version(version):
+        return re.findall(r'\d+|\D+', version)
+    
+    def convert_part(part):
+        return int(part) if part.isdigit() else part
+    
+    required_parts = split_version(required)
+    current_parts = split_version(current)
+    
+    for p1, p2 in zip(required_parts, current_parts):
+        p1 = convert_part(p1)
+        p2 = convert_part(p2)
+        if p1 < p2:
+            return True
+        elif p1 > p2:
+            return False
+    
+    if len(required_parts) < len(current_parts):
+        return True
+    elif len(required_parts) > len(current_parts):
+        return False
+    
+    return -1
+
 # Include & Exclude filter
 def item_filter(args,item=None) -> None:
     """ Filter for items like disks, sensors, etc.."""
