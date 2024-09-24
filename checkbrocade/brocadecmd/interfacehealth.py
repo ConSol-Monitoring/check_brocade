@@ -19,7 +19,7 @@
 import logging
 from monplugin import Check,Status
 from ..tools import cli
-from ..tools.helper import severity,item_filter
+from ..tools.helper import severity,item_filter,compare_versions
 from ..tools.connect import broadcomAPI
 
 __cmd__ = "interface-health"
@@ -68,7 +68,7 @@ def run():
     except Exception as e:
         logger.error(f"{e}")
         check.exit(Status.UNKNOWN, f"{e}")
-        
+
 def plugin(check):
     base_url = f"https://{args.host}:{args.port}"
     api = broadcomAPI(logger, base_url, args.username, args.password)
@@ -76,7 +76,7 @@ def plugin(check):
     c = api.make_request("GET", "rest/running/brocade-chassis/chassis")
     chassis = c['chassis']
     # check vf enabled and in use
-    if chassis['vf-enabled']:
+    if 'vf-enabled' in chassis:
         logger.info(f"VF Found checking for IDs")
         s = api.make_request("GET","rest/running/brocade-fibrechannel-logical-switch/fibrechannel-logical-switch")
         # which vfs have ports
@@ -100,6 +100,82 @@ def plugin(check):
     5 : Faulty
     6 : Testing
     """
+    porttype = {
+        0 : "unknown",
+        7 : "e-port",
+        10: "g-port",
+        11: "u-port",
+        15: "f-port",
+        16: "l-port",
+        17: "fcoe-port",
+        19: "ex-port",
+        20: "d-port",
+        21: "sim-port",
+        22: "af-port",
+        23: "ae-port",
+        25: "ve-port",
+        26: "ethernet-flex-port",
+        29: "flex-port",
+        30: "n-port",
+        31: "mirror-port",
+        32: "icl-port",
+        33: "fc-lag-port",
+        32768: "lb-port,"
+    }
+    operstate = {
+        0: "Undefined",
+        2: "Online",
+        3: "Offline",
+        5: "Faulty",
+        6: "Testing",
+    }
+    """
+    seems to be implemented in FabricOS > 9.0.0
+    operstate = {
+        0: "null,",
+        1: "offline,",
+        2: "online,",
+        3: "online warning,",
+        4: "disabled,",
+        5: "degraded,",
+        6: "initializing,",
+        7: "delete pending,",
+        8: "ha online,",
+        9: "ha offline,",
+        10: "ha ready,",
+        11: "empty,",
+        12: "in progress,",
+        13: "misconfig,",
+        14: "failover,",
+        15: "down pending,",
+        16: "circuit disabled/fenced/testing,",
+        17: "internal error,",
+        18: "ipsec error,",
+        19: "network error,",
+        20: "authentication error,",
+        21: "timeout,",
+        22: "tcp-timeout,",
+        23: "remote close timeout,",
+        24: "remote close,",
+        25: "rejected,",
+        26: "no port,",
+        27: "no route,",
+        28: "dp offline,",
+        29: "hcl inprogress,",
+        30: "internal error,",
+        31: "configuration incomplete,",
+        32: "circuit fenced,",
+        33: "child delete complete,",
+        34: "delete failure,",
+        35: "spill over,",
+        36: "running,",
+        37: "testing,",
+        38: "aborted,",
+        39: "passed,",
+        40: "failed",
+    } 
+    """
+    supported_version = compare_versions("9.1.0", api.version(True))
     port_count = 0
     for vf,fibrechannel in virtual_fabrics.items(): 
         if 'novf' in vf: 
@@ -108,42 +184,50 @@ def plugin(check):
             VF = f"VF {vf:3} "
         port_count += len(fibrechannel)    
         
-        for int in fibrechannel:
+        for intf in fibrechannel:
+            if supported_version:
+                ifType = intf['port-type-string'] 
+                oper_state = intf['operational-status-string']
+            else:
+                ifType = porttype[intf['port-type']]
+                oper_state = operstate[intf['operational-status']]
+                
+            
             admin_state = "enabled" 
             # just e-ports are interesting
             if 'all' in args.port_type:
                 pass
-            elif int['port-type-string'] not in args.port_type:
+            elif ifType not in args.port_type:
                 port_count -= 1
                 continue
             
-            logline = f"{VF}{int['port-type-string']} {int['name']} ({int['user-friendly-name']}) {int['operational-status-string']} {int['operational-status']}"
+            logline = f"{VF}{ifType} {intf['name']} ({intf['user-friendly-name']}) {oper_state} {intf['operational-status']}"
            
             # Filter out include / exclude and disabled ports 
-            if (args.exclude or args.include) and item_filter(args,f"{int['port-type-string']} {int['name']} {int['user-friendly-name']}"): 
+            if (args.exclude or args.include) and item_filter(args,f"{ifType} {intf['name']} {intf['user-friendly-name']}"): 
                 logger.info(f"skip {logline} include / exlude match")
                 port_count -= 1
                 continue
            
             # port not enabled but ignored 
-            if args.ignore_disabled and not int['is-enabled-state']:
+            if args.ignore_disabled and not intf['is-enabled-state']:
                 logger.info(f"ignore {logline} it's disabled")
                 port_count -= 1
                 continue
            
-            if not int['is-enabled-state']: admin_state = "disabled"
+            if not intf['is-enabled-state']: admin_state = "disabled"
             
-            text = f"{VF}{int['port-type-string']} {int['name']:5} {int['user-friendly-name']:23} {admin_state}/{int['operational-status-string']}"
+            text = f"{VF}{ifType} {intf['name']:5} {intf['user-friendly-name']:23} {admin_state}/{oper_state}"
             # Check for status    
-            if not int['is-enabled-state']:
+            if not intf['is-enabled-state']:
                 check.add_message(Status.WARNING, text)
             # critical if healthy, faulty or offline
-            if "healthy" not in int['port-health']:
-                check.add_message(Status.CRITICAL, f"{VF}{int['port-type-string']} {int['name']:5} {int['user-friendly-name']:23} {int['port-health']}")
-            elif int['operational-status'] == 5 or int['operational-status'] == 3:
+            if supported_version and "healthy" not in intf['port-health']:
+                check.add_message(Status.CRITICAL, f"{VF}{ifType} {intf['name']:5} {intf['user-friendly-name']:23} {intf['port-health']}")
+            elif intf['operational-status'] == 5 or intf['operational-status'] == 3:
                 check.add_message(Status.CRITICAL, text)   
             # warning if undefined or testing
-            elif int['operational-status'] == 0 or int['operational-status'] == 6:
+            elif intf['operational-status'] == 0 or intf['operational-status'] == 6:
                 check.add_message(Status.WARNING, text)
             else:
                 check.add_message(Status.OK, text) 
