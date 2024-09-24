@@ -78,14 +78,22 @@ def plugin(check):
     summary = ""
 
     if 'blade' in sType:
+        blade_count = 0
         b = api.make_request("GET", "rest/running/brocade-fru/blade")
         for blade in b['blade']:
-            text = f"{blade['blade-type']} on slot {blade['slot-number']} is {blade['blade-state']}"
+            if 'blade-type' in blade:
+                blade_count += 1
+                text = f"{blade['blade-type']} on slot {blade['slot-number']} is {blade['blade-state']}"
+            else:
+                text = f"unknown on slot {blade['slot-number']} is {blade['blade-state']}"
+                
             if 'enabled' in blade['blade-state']:
                 check.add_message(Status.OK, text)
+            elif 'vacant' in blade['blade-state']:
+                pass
             else:
                 check.add_message(Status.CRITICAL, text)
-        summary += f"{len(b['blade'])} Blades "
+        summary += f"{blade_count}/{len(b['blade'])} Blades "
 
     # no usabel respones for wwn query
     if 'wwn' in sType:
@@ -138,7 +146,11 @@ def plugin(check):
         if not t:
             check.add_messages(Status.OK, "no temp")
         else:
+            sensor_count = len(t['sensor'])
             for sensor in t['sensor']:
+                if 'absent' in sensor['state']:
+                    sensor_count -= 1
+                    continue
                 if 'ok' not in sensor['state']:
                     check.add_message(Status.WARNING, f"Sensor {sensor['category']} {sensor['id']} is {sensor['state']}")
                 if 'temperature' in sensor['category']:
@@ -148,8 +160,8 @@ def plugin(check):
                 if args.perfdata:
                     perfData = {'label': f"{sensor['category']}_{sensor['id']}", 'value': f"{sensor[sensor['category']]}", 'uom': uom}
                     check.add_perfdata(**perfData)
-            summary += f"{len(t['sensor'])} Temp-Sensors"
-
+            summary += f"{sensor_count} Temp-Sensors"
+            
     (code, message) = check.check_messages(separator="\n")
     if code == Status.OK:
         check.exit(code=code,message=f"{summary}\n{message}")
