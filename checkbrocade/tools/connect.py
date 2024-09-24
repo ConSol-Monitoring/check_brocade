@@ -18,7 +18,7 @@ import atexit
 import logging,sys,traceback
 from checkbrocade import CheckBrocadeConnnectException
 import json
-from pprint import pprint as pp
+import re
 
 #from http.client import HTTPConnection  # py3
 
@@ -38,12 +38,12 @@ class broadcomAPI():
             'Content-Type': 'application/yang-data+json',
         })
         self.verify = False
-        self.headers['Authorization'] = self.login()
-        logger.debug(f"#---> init header : {self.headers}")
+        self.headers['Authorization'], self.apiversion = self.login()
+        self.logger.debug(f"#---> init header : {self.headers}")
         self.session = requests.Session()
         self.session.verify = self.verify
         self.session.headers.update(self.headers)
-        logger.debug(f"session header {self.session.headers}")
+        self.logger.debug(f"full session object {self.session}")
     
     def login(self):
         """
@@ -56,11 +56,12 @@ class broadcomAPI():
             self.logger.error(f"requests response not ok")
         response.raise_for_status()
         CustomBasic = response.headers.get("Authorization")
+        ApiVersion = response.headers.get("Content-Type")
         if response.status_code == 200:
             self.logger.info(f"Login successfull {response.status_code}")
             atexit.register(broadcomAPI.logout, self)
             self.logger.debug(f'for manual logout please use curl \n curl -kv -X POST -H "Authorization: Custom_Basic {CustomBasic}" -H "Accept: application/yang-data+json" "{self.base_url}/rest/logout"')
-            return CustomBasic
+            return CustomBasic, ApiVersion
         else:
             self.logger.error(f"Login failure {response.status_code}") 
         
@@ -85,3 +86,30 @@ class broadcomAPI():
         self.logger.debug(f"{json.dumps(r_dict, indent=4, sort_keys=True)}") 
         #self.logger.debug(f"{r_dict}")
         return r_dict['Response']
+
+    def version(self,fabric=False):
+        """
+        https://techdocs.broadcom.com/us/en/fibre-channel-networking/fabric-os/fabric-os-rest-api/9-2-x/v26395730/v25026650.html
+        The resource API version for Fabric OS 9.2.1 is 2.0.0
+        The resource API version for Fabric OS 9.1.1 is 1.60.0 (major.minor.patch)
+        The resource API version for Fabric OS 9.1.0b is 1.50.0. 
+        The resource API version for Fabric OS 9.0.1 is 1.40.0. 
+        The resource API version for Fabric OS 9.0.0a is 1.40.0. 
+        The resource API version for Fabric OS 8.2.1b is 1.30.0.
+        """
+        FabricOS = {
+            "1.30.0": "8.2.1b",
+            "1.40.0": "9.0.1",
+            "1.50.0": "9.1.0b",
+            "1.60.0": "9.1.1",
+            "2.0.0": "9.2.1"
+        }
+        match = re.search(r'^.*version=(.*)$', self.apiversion)
+        if match:
+            if fabric:
+                version = FabricOS[match.group(1)]
+            else:
+                version = match.group(1)
+        else:
+            version = "unknown"
+        return version
