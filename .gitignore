@@ -16,6 +16,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+requirements.txt
 build/
 develop-eggs/
 dist/

@@ -6,7 +6,7 @@ requires = ["flit_core >=3.2,<4"]
 name = "checkbrocade"
 readme = "README.md"
 description = "check_brocade monitoring plugin"
-version = "0.1a2"
+version = "0.2b"
 requires-python = ">= 3.6"
 authors = [
     { name = "Matthias Gallinger", email = "matthias.gallinger@consol.de" }
@@ -15,7 +15,7 @@ dependencies = [
     "monplugin >= 0.6.2",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Topic :: System :: Monitoring",
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
 ]
