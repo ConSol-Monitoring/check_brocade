@@ -37,10 +37,11 @@ def run():
     parser.set_description(description)
     parser.add_optional_arguments(cli.Argument.EXCLUDE,
                                   cli.Argument.INCLUDE)
+    
     parser.add_optional_arguments({
         'name_or_flags': ['--ignore-disabled'],
         'options': {
-            'action': 'store',
+            'action': 'store_true',
             'help': 'ignore interfaces in disabled state',
         }},
         {
@@ -49,9 +50,16 @@ def run():
             'action': 'store',
             'default': 'e-port',
             'nargs': '+',
-        'help': "list of port-type to check, default is e-port",
+            'help': "list of port-type to check, default is e-port",
+        }},
+        {
+        'name_or_flags': ['--show-all'],
+        'options': {
+            'action': 'store_true',
+            'help': 'show all interfaces',
         }
     })
+    
     args = parser.get_args()
 
     # Setup module logging 
@@ -76,7 +84,7 @@ def plugin(check):
     c = api.make_request("GET", "rest/running/brocade-chassis/chassis")
     chassis = c['chassis']
     # check vf enabled and in use
-    if 'vf-enabled' in chassis:
+    if 'vf-enabled' in chassis and chassis['vf-enabled']:
         logger.info(f"VF Found checking for IDs")
         s = api.make_request("GET","rest/running/brocade-fibrechannel-logical-switch/fibrechannel-logical-switch")
         # which vfs have ports
@@ -201,8 +209,12 @@ def plugin(check):
                 port_count -= 1
                 continue
             
-            logline = f"{VF}{ifType} {intf['name']} ({intf['user-friendly-name']}) {oper_state} {intf['operational-status']}"
-           
+            logline = f"{VF}{ifType} {intf['name']} ({intf['user-friendly-name']}) {admin_state} {intf['is-enabled-state']} / {oper_state} {intf['operational-status']}"
+          
+            # Show all interfaces
+            if args.show_all:
+                print(logline) 
+                continue
             # Filter out include / exclude and disabled ports 
             if (args.exclude or args.include) and item_filter(args,f"{ifType} {intf['name']} {intf['user-friendly-name']}"): 
                 logger.info(f"skip {logline} include / exlude match")
