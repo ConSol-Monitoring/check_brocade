@@ -94,8 +94,12 @@ class Parser:
                                                envvar='BROCADE_API_PASS',
                                                help='Password to use when connecting to host, '
                                                     'can also be set by env BROCADE_API_PASS')
-
-
+        
+        self._standard_args_group.add_argument('-s', '--sessionfile',
+                                               required=False,
+                                               action='store',
+                                               help='Sessionfile to reduce user logins')
+        
         self._standard_args_group.add_argument('-nossl', '--disable-ssl-verification',
                                                required=False,
                                                action='store_true',

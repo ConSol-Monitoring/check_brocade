@@ -79,7 +79,7 @@ def run():
 
 def plugin(check):
     base_url = f"https://{args.host}:{args.port}"
-    api = broadcomAPI(logger, base_url, args.username, args.password)
+    api = broadcomAPI(logger, base_url, args.username, args.password, args.sessionfile)
     virtual_fabrics = {}
     c = api.make_request("GET", "rest/running/brocade-chassis/chassis")
     chassis = c['chassis']

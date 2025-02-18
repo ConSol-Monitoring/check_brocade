@@ -68,7 +68,7 @@ def plugin(check):
         sType = args.type
 
     logger.debug(f"begin {__cmd__}")
-    api = broadcomAPI(logger, base_url, args.username, args.password)
+    api = broadcomAPI(logger, base_url, args.username, args.password, args.sessionfile)
 
     logger.debug(f"Resource API version: {api.version()} might be FabricOS {api.version(True)}")
     if not compare_versions("9.0.0", api.version(True)):
