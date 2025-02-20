@@ -50,7 +50,7 @@ def run():
             'action': 'store',
             'default': 'e-port',
             'nargs': '+',
-            'help': "list of port-type to check, default is e-port",
+            'help': "list of port-type to check, default is e-port. Can also be 'all'",
         }},
         {
         'name_or_flags': ['--show-all'],

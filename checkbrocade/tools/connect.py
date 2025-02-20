@@ -78,13 +78,15 @@ class broadcomAPI():
     
     def verify_token(self):
         # verify saved token. As there is no proper status endpoint use .../login
-        status_url = f"{self.base_url}/rest/login"
+        status_url = f"{self.base_url}/rest/running/brocade-chassis/chassis"
+        self.logger.info("verify token")
         try:
-            response = self.session.post(status_url, timeout=(5, 5))
+            response = self.session.get(status_url, timeout=(5, 5))
+            self.logger.debug(f"verify url {status_url} response with {response.status_code}")
             self.apiversion = response.headers.get("Content-Type")
             if response.status_code == 200:
                 return True
-            elif response.status_code == 403:
+            elif response.status_code == 403 or response.status_code == 401:
                 return False
             self.logger.warning(f"Unexpected status code {response.status_code} in verify_token()")
         except requests.RequestException as e:
