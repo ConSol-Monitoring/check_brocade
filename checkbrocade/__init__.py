@@ -13,7 +13,7 @@
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__version__ = "0.3b"
+__version__ = "0.4b"
 
 class CheckBrocadeException(Exception):
     pass

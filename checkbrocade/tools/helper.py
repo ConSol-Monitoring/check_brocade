@@ -15,6 +15,7 @@
 
 from monplugin import Range
 import re
+from types import SimpleNamespace
 
 # Security level mapping
 def severity(level) -> None:
@@ -82,3 +83,18 @@ def item_filter(args,item=None) -> None:
             return(False)
         else:
             return(True)
+
+# Create a Python NameSpace object from API JSON respone        
+def sanitize_key(key):
+    """ replace nasty chars by _ """
+    key = key.replace("-", "_")
+    key = re.sub(r'\W|^(?=\d)', '_', key)  # Ersetzt ungültige Zeichen durch "_"
+    return key
+
+def convert_keys(obj):
+    """ convert into namespaces"""
+    if isinstance(obj, dict):
+        return SimpleNamespace(**{sanitize_key(k): convert_keys(v) for k, v in obj.items()})
+    elif isinstance(obj, list):
+        return [convert_keys(i) for i in obj]
+    return obj
