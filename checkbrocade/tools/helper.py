@@ -88,7 +88,7 @@ def item_filter(args,item=None) -> None:
 def sanitize_key(key):
     """ replace nasty chars by _ """
     key = key.replace("-", "_")
-    key = re.sub(r'\W|^(?=\d)', '_', key)  # Ersetzt ungültige Zeichen durch "_"
+    key = re.sub(r'\W|^(?=\d)', '_', key) 
     return key
 
 def convert_keys(obj):
@@ -98,3 +98,60 @@ def convert_keys(obj):
     elif isinstance(obj, list):
         return [convert_keys(i) for i in obj]
     return obj
+
+# Convert time into secons
+# 1d / 1 W / 1.5h
+def to_seconds(value) -> None:
+    if not value:
+        return None
+    
+    match = re.search(r'([\d.]+)\s*([smhdwMy]?)', value.lower())
+    if not match:
+        return None
+    
+    time, unit = float(match.group(1)), match.group(2)
+    unit_multipliers = {
+        "s": 1,
+        "m": 60,
+        "h": 3600,
+        "d": 86400,
+        "w": 604800,
+        "M": 2592000,  # Monat ≈ 30 Tage
+        "y": 31536000  # Jahr ≈ 365 Tage
+    }
+    
+    return time * unit_multipliers.get(unit, 1)    
+
+def seconds_to_human(seconds: int) -> str:
+    if seconds < 0:
+        return "unknown input"
+    
+    time_units = [
+        ("years", 31536000),
+        ("months", 2592000),
+        ("weeks", 604800),
+        ("days", 86400),
+        ("hours", 3600),
+        ("minutes", 60),
+        ("seconds", 1)
+    ]
+    
+    result = []
+    
+    if seconds >= 31536000:  # years
+        relevant_units = ["years", "months", "weeks"]
+    elif seconds >= 604800:  # Wochen-Bereich
+        relevant_units = ["weeks", "days", "hours"]
+    else:
+        relevant_units = ["day", "hours", "minutes"]
+    
+    for unit, unit_seconds in time_units:
+        if unit in relevant_units:
+            value = seconds // unit_seconds
+            if value > 0:
+                result.append(f"{value} {unit}{'n' if value > 1 else ''}")
+                seconds %= unit_seconds
+        if len(result) == 3:
+            break
+    
+    return ", ".join(result) if result else "0 seconds"

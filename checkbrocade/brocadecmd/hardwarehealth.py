@@ -17,9 +17,9 @@
 
 
 import logging
-from monplugin import Check,Status
+from monplugin import Check,Status,Threshold
 from ..tools import cli
-from ..tools.helper import severity,compare_versions
+from ..tools.helper import severity,compare_versions,convert_keys,seconds_to_human
 from ..tools.connect import broadcomAPI
 
 __cmd__ = "hardware-health"
@@ -41,7 +41,17 @@ def run():
             'action': 'store',
             'nargs': '+',
             'help': 'List of available sensor types (separated by space):\nblade fan power temp',
-        }
+        }},
+        {'name_or_flags': ['--uptime-warn'],
+        'options': {
+            'action': 'store',
+            'help': 'Warning until system uptime ge seconds',
+        }},
+        {'name_or_flags': ['--uptime-crit'],
+        'options': {
+            'action': 'store',
+            'help': 'Critical until system uptime ge seconds',
+        },
     })
     args = parser.get_args()
 
@@ -62,7 +72,7 @@ def run():
 
 def plugin(check):
     base_url = f"https://{args.host}:{args.port}"
-    if not args.type:
+    if not hasattr(args, 'type') or not args.type:
         sType = ['blade','fan','power','temp']
     else:
         sType = args.type
@@ -75,6 +85,16 @@ def plugin(check):
         logger.warning(f"as version {api.version(True)} is to old I remove sensor endpoint")
         sType.remove("temp")
 
+    if args.uptime_warn or args.uptime_crit:
+        uptime = Threshold(args.uptime_warn or None, args.uptime_crit or None)
+        response = api.make_request("GET","rest/running/brocade-chassis/chassis")
+        c = convert_keys(response)
+        chassis = c.chassis
+        logger.info(f"uptime is {chassis.system_uptime} or {seconds_to_human(chassis.system_uptime)}")
+        uptime_status = uptime.get_status(chassis.system_uptime)
+        check.add_message(uptime_status, f"uptime is {seconds_to_human(chassis.system_uptime)}")
+
+
     summary = ""
 
     if 'blade' in sType:
@@ -86,7 +106,7 @@ def plugin(check):
                 text = f"{blade['blade-type']} on slot {blade['slot-number']} is {blade['blade-state']}"
             else:
                 text = f"unknown on slot {blade['slot-number']} is {blade['blade-state']}"
-                
+
             if 'enabled' in blade['blade-state']:
                 check.add_message(Status.OK, text)
             elif 'vacant' in blade['blade-state']:
@@ -161,7 +181,7 @@ def plugin(check):
                     perfData = {'label': f"{sensor['category']}_{sensor['id']}", 'value': f"{sensor[sensor['category']]}", 'uom': uom}
                     check.add_perfdata(**perfData)
             summary += f"{sensor_count} Temp-Sensors"
-            
+
     (code, message) = check.check_messages(separator="\n")
     if code == Status.OK:
         check.exit(code=code,message=f"{summary}\n{message}")
