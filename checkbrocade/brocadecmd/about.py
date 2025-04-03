@@ -58,7 +58,7 @@ def plugin(check):
     api = broadcomAPI(logger, base_url, args.username, args.password, args.sessionfile)
     response_data = api.make_request("GET", "rest/running/brocade-chassis/chassis")
     chassis = response_data['chassis']
-    check.add_message(Status.OK, f"{chassis['manufacturer']} {chassis['product-name']} S/N {chassis['vendor-serial-number']}")
+    check.add_message(Status.OK, f"{chassis['manufacturer']} {chassis['product-name']} FOS {api.version(True)} S/N {chassis['vendor-serial-number']}")
     (code, message) = check.check_messages(separator="\n")
     check.exit(code=code,message=message)
 
