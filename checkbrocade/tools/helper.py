@@ -127,29 +127,29 @@ def seconds_to_human(seconds: int) -> str:
         return "unknown input"
     
     time_units = [
-        ("years", 31536000),
-        ("months", 2592000),
-        ("weeks", 604800),
-        ("days", 86400),
-        ("hours", 3600),
-        ("minutes", 60),
-        ("seconds", 1)
+        ("year", 31536000),
+        ("month", 2592000),
+        ("week", 604800),
+        ("day", 86400),
+        ("hour", 3600),
+        ("minute", 60),
+        ("second", 1)
     ]
     
     result = []
     
     if seconds >= 31536000:  # years
-        relevant_units = ["years", "months", "weeks"]
+        relevant_units = ["year", "month", "week"]
     elif seconds >= 604800:  # Wochen-Bereich
-        relevant_units = ["weeks", "days", "hours"]
+        relevant_units = ["week", "day", "hour"]
     else:
-        relevant_units = ["day", "hours", "minutes"]
+        relevant_units = ["day", "hour", "minute"]
     
     for unit, unit_seconds in time_units:
         if unit in relevant_units:
             value = seconds // unit_seconds
             if value > 0:
-                result.append(f"{value} {unit}{'n' if value > 1 else ''}")
+                result.append(f"{value} {unit}{'s' if value > 1 else ''}")
                 seconds %= unit_seconds
         if len(result) == 3:
             break
