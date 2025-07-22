@@ -17,6 +17,7 @@
 
 
 import logging
+import re
 from monplugin import Check,Status
 from ..tools import cli
 from ..tools.helper import severity,item_filter,compare_versions
@@ -48,7 +49,7 @@ def run():
         'name_or_flags': ['--port-type'],
         'options': {
             'action': 'store',
-            'default': 'e-port',
+            'default': ['e-port'],
             'nargs': '+',
             'help': "list of port-type to check, default is e-port. Can also be 'all'",
         }},
@@ -83,6 +84,14 @@ def plugin(check):
     virtual_fabrics = {}
     c = api.make_request("GET", "rest/running/brocade-chassis/chassis")
     chassis = c['chassis']
+    
+    # check if it's a director
+    if re.search(r'^x\d', chassis['product-name'].lower()) and 'dcx' in chassis['vendor-part-number'].lower():
+        logger.info(f"chassis is a brocade director with name: {chassis['product-name']} / part-number: {chassis['vendor-part-number']}")
+        isDirector = True
+    else: 
+        isDirector = False
+       
     # check vf enabled and in use
     if 'vf-enabled' in chassis and chassis['vf-enabled']:
         logger.info(f"VF Found checking for IDs")
@@ -99,7 +108,10 @@ def plugin(check):
         logger.info(f"NO VF go ahead")
         f = api.make_request("GET","rest/running/brocade-interface/fibrechannel")
         virtual_fabrics['novf']= f['fibrechannel']
-  
+
+    ## first try of director didn't respond with trunk info 
+    ##t = api.make_request("GET","rest/running/brocade-fibrechannel-trunk/trunk-area/")
+    
     """
     operational-status(-string)
     0 : Undefined
@@ -190,6 +202,7 @@ def plugin(check):
             VF = ""
         else:
             VF = f"VF {vf:3} "
+            
         port_count += len(fibrechannel)    
         
         for intf in fibrechannel:
@@ -199,22 +212,31 @@ def plugin(check):
             else:
                 ifType = porttype[intf['port-type']]
                 oper_state = operstate[intf['operational-status']]
+              
+            # as directors have just icl ports  
+            if isDirector:
+                if 'icl-port' in ifType and 'e-port' in intf['port-scn']:
+                    ifType = "icl-port (trunk master)"
+                elif 'icl-port' in ifType and 't-port' in intf['port-scn']:
+                    ifType = "icl-port (trunk slave)"
+                args.port_type.append('icl')
                 
-            
+                
             admin_state = "enabled" 
-            # just e-ports are interesting
-            if 'all' in args.port_type:
-                pass
-            elif ifType not in args.port_type:
-                port_count -= 1
-                continue
-            
             logline = f"{VF}{ifType} {intf['name']} ({intf['user-friendly-name']}) {admin_state} {intf['is-enabled-state']} / {oper_state} {intf['operational-status']}"
-          
             # Show all interfaces
             if args.show_all:
                 print(logline) 
                 continue
+            
+            # just e-ports are interesting
+            if 'all' in args.port_type:
+                pass
+            if not any(re.search(rf'^{re.escape(port)}', ifType, re.IGNORECASE) for port in args.port_type):
+                logger.info(f"skip {logline} port not int white list")
+                port_count -= 1
+                continue
+            
             # Filter out include / exclude and disabled ports 
             if (args.exclude or args.include) and item_filter(args,f"{ifType} {intf['name']} {intf['user-friendly-name']}"): 
                 logger.info(f"skip {logline} include / exlude match")
@@ -229,14 +251,20 @@ def plugin(check):
            
             if not intf['is-enabled-state']: admin_state = "disabled"
             
-            text = f"{VF}{ifType} {intf['name']:5} {intf['user-friendly-name']:23} {admin_state}/{oper_state}"
-            # Check for status    
+            logger.info(f"check {logline}")
+            if supported_version:
+                text = f"{VF}{ifType} {intf['name']:5} {intf['user-friendly-name']:23} {admin_state}/{oper_state} {intf['port-health']}"
+            else:
+                text = f"{VF}{ifType} {intf['name']:5} {intf['user-friendly-name']:23} {admin_state}/{oper_state}"
+
+            # Check for status
             if not intf['is-enabled-state']:
                 check.add_message(Status.WARNING, text)
             # critical if healthy, faulty or offline
-            if supported_version and "healthy" not in intf['port-health']:
-                check.add_message(Status.CRITICAL, f"{VF}{ifType} {intf['name']:5} {intf['user-friendly-name']:23} {intf['port-health']}")
-            elif intf['operational-status'] == 5 or intf['operational-status'] == 3:
+            # port-health seems to be just an informal field
+            #if supported_version and "healthy" not in intf['port-health']:
+            #    check.add_message(Status.CRITICAL, f"{VF}{ifType} {intf['name']:5} {intf['user-friendly-name']:23} {intf['port-health']}")
+            if intf['operational-status'] == 5 or intf['operational-status'] == 3:
                 check.add_message(Status.CRITICAL, text)   
             # warning if undefined or testing
             elif intf['operational-status'] == 0 or intf['operational-status'] == 6:
