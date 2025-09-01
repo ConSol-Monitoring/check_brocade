@@ -6,7 +6,7 @@ requires = ["flit_core >=3.2,<4"]
 name = "checkbrocade"
 readme = "README.md"
 description = "check_brocade monitoring plugin"
-version = "0.3b"
+version = "0.5b"
 requires-python = ">= 3.6"
 authors = [
     { name = "Matthias Gallinger", email = "matthias.gallinger@consol.de" }
